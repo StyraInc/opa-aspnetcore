@@ -1,0 +1,51 @@
+{
+  "build": {
+    "content": [
+      {
+        "exclude": [
+          "_site/**"
+        ],
+        "files": [
+          "**/*.{md,yml}"
+        ]
+      },
+      {
+        "files": [
+          "README.md"
+        ],
+        "src": "../"
+      }
+    ],
+    "globalMetadata": {
+      "_appName": "Styra ASP.NET Core SDK",
+      "_appTitle": "Styra ASP.NET Core SDK",
+      "_enableSearch": true,
+      "pdf": false
+    },
+    "output": "_site",
+    "resource": [
+      {
+        "files": [
+          "images/**"
+        ]
+      }
+    ],
+    "template": [
+      "default",
+      "modern"
+    ]
+  },
+  "metadata": [
+    {
+      "dest": "api",
+      "src": [
+        {
+          "files": [
+            "*.csproj"
+          ],
+          "src": "../src/Styra.Opa.AspNetCore"
+        }
+      ]
+    }
+  ]
+}
