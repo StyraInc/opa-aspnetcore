@@ -11,11 +11,9 @@ public class OPAContainerFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         string[] startupFiles = {
-            "testdata/policy.rego",
-            "testdata/weird_name.rego",
+            "testdata/simple/auth.rego",
+            "testdata/simple/policy.rego",
             "testdata/simple/system.rego",
-            "testdata/condfail.rego",
-            "testdata/data.json"
         };
         string[] opaCmd = { "run", "--server" };
         var startupCommand = new List<string>().Concat(opaCmd).Concat(startupFiles).ToArray();

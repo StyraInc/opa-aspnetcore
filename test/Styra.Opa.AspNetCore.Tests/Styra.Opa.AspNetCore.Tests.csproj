@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
@@ -10,6 +10,7 @@
 
   <!-- Normal Package Includes. -->
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="8.0.8" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Testcontainers" Version="3.10.0" />
@@ -26,12 +27,16 @@
 
   <!-- OPA API Reference. -->
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Styra.Opa.AspNetCore\Styra.Opa.AspNetCore.csproj" />
+    <PackageReference Include="Styra.Opa" Version="1.3.6" />
   </ItemGroup>
 
   <!-- Ensure our data files are copied next to the test executables. -->
   <ItemGroup>
     <None Update="testdata\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Styra.Opa.AspNetCore\Styra.Opa.AspNetCore.csproj" />
   </ItemGroup>
 
 
