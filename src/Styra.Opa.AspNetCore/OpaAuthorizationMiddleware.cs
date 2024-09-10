@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -37,19 +38,29 @@ public class OpaAuthorizationMiddleware
     {
         _next = next;
         _logger = logger;
+        _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
     }
 
     public async Task InvokeAsync(HttpContext context)
     // HttpContext context, IOpaAuthorizationSerivce opaAuthzService)
     {
+        _logger.LogWarning("user identity: {ident}, is auth?: {authd}", context.User.Identity.Name, context.User.Identity.IsAuthenticated);
         // 1 - if the request is not authenticated, nothing to do
         if (context.User.Identity == null || !context.User.Identity.IsAuthenticated)
         {
-            await _next(context);
+
+            _logger.LogWarning("unauth context is: {context}", context);
+            context.Response.StatusCode = 403;
+            await context.Response.WriteAsync(JsonConvert.SerializeObject(new { status = "Not Authorized" }), context.RequestAborted);
+
+            // await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonSerializerOptions),
+            //     cancellationToken);
+            //await _next(context);
             return;
         }
 
         var cancellationToken = context.RequestAborted;
+        _logger.LogWarning("authn'd context is: {context}, user: {user}", context, context.User.Identity);
 
         // 2. The 'sub' claim is how we find the user in our system
         // var userSub = context.User.FindFirst(StandardJwtClaimTypes.Subject)?.Value;

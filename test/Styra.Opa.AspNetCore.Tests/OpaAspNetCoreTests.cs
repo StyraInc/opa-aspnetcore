@@ -1,20 +1,54 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Styra.Opa.OpenApi;
 using Styra.Opa.OpenApi.Models.Components;
 using Styra.Opa.OpenApi.Models.Requests;
 using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 
 namespace Styra.Opa.AspNetCore.Tests;
+
+// 
+// Source: https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-3.1#mock-authentication
+public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+{
+    [Obsolete]
+    public TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> options,
+#pragma warning disable CS0618 // Type or member is obsolete
+        ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock)
+#pragma warning restore CS0618 // Type or member is obsolete
+        : base(options, logger, encoder, clock)
+    {
+    }
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var claims = new[] { new Claim(ClaimTypes.Name, "Test user") };
+        var identity = new ClaimsIdentity(claims, "Test");
+        var principal = new ClaimsPrincipal(identity);
+        var ticket = new AuthenticationTicket(principal, "Test");
+
+        var result = AuthenticateResult.Success(ticket);
+        this.Logger.LogWarning("RUNNING!");
+
+        return Task.FromResult(result);
+    }
+}
 
 public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixture<EOPAContainerFixture>
 {
     public IContainer _containerOpa;
     public IContainer _containerEopa;
     private readonly TestServer _server;
-    private readonly HttpClient _client;
+    private HttpClient _client;
 
     public OpaAspNetCoreTests(OPAContainerFixture opaFixture, EOPAContainerFixture eopaFixture)
     {
@@ -25,18 +59,44 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
            .ConfigureServices(services =>
            {
                // Add any required services
-               //services.AddMyServices();
+               services.AddAuthentication(opts => { opts.DefaultScheme = "DynamicAuthenticationScheme"; })
+                    .AddCookie() // Not used, except for unauth tests.
+                    .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
+                        "Test", options => { })
+                    .AddPolicyScheme(
+                        "DynamicAuthenticationScheme",
+                        "Default system policy",
+                        cfgOpts => cfgOpts.ForwardDefaultSelector = ctx =>
+                            ctx.Request.Headers.ContainsKey("Authorization")
+                                ? "Test"
+                                : Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+               services.AddRouting();
+               services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace).AddConsole());
            })
            .Configure(app =>
            {
                // Configure the middleware pipeline
-               app.UseMiddleware<Styra.Opa.AspNetCore.OpaAuthorizationMiddleware>();
-               // Add other middleware as needed
+               app.UseRouting();
+               app.UseAuthentication();
+               app.UseMiddleware<OpaAuthorizationMiddleware>();
+               app.UseEndpoints(endpoints =>
+               {
+                   endpoints.MapGet("/hello", async (context) =>
+                   {
+                       foreach (var header in context.Request.GetTypedHeaders().Headers)
+                       {
+                           Console.WriteLine(header);
+                       }
+
+                       await context.Response.WriteAsync("Hello Tests");
+                   });
+               });
            });
 
         // Create the TestServer
         _server = new TestServer(builder);
         _client = _server.CreateClient();
+        //_client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test");
     }
 
     private OpaApiClient GetOpaApiClient()
@@ -102,8 +162,40 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         //     .StartAsync();
 
         // var response = await host.GetTestClient().GetAsync("/");
-        var response = await _client.GetAsync("/");
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var response = await _client.GetAsync("/hello");
+        Assert.False(response.IsSuccessStatusCode);
+        Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
+        // var responseBody = await response.Content.ReadAsStringAsync();
+        // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MiddlewareTest_AuthenticatedTest()
+    {
+        // using var host = await new WebHostBuilder()
+        //     .ConfigureWebHost(webBuilder =>
+        //     {
+        //         webBuilder
+        //             .UseTestServer()
+        //             .ConfigureServices(services =>
+        //             {
+        //                 services.AddMyServices();
+        //             })
+        //             .Configure(app =>
+        //             {
+        //                 app.UseMiddleware<OpaAuthorizationMiddleware>();
+        //             });
+        //     })
+        //     .StartAsync();
+
+        // var response = await host.GetTestClient().GetAsync("/");
+        Console.WriteLine("Value before {0}", _client.DefaultRequestHeaders.Authorization);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", "test");
+        Console.WriteLine("Value after {0}", _client.DefaultRequestHeaders.Authorization);
+        var response = await _client.GetAsync("/hello");
+        Assert.True(response.IsSuccessStatusCode);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        Assert.Equal("Hello Tests", responseBody);
 
         // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
