@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -29,6 +31,18 @@ public static class HttpContextExtensions
 }
 public class OpaAuthorizationMiddleware
 {
+    // Fields useful for the I/O schema.
+    private string SubjectType = "aspnetcore_authentication";
+    private string RequestResourceType = "endpoint";
+    private string RequestContextType = "http";
+
+    // If opaPath is null, then we assume the user wants to use the default path.
+    private string opaPath;
+    private string reasonKey;
+    //private ContextDataProvider ctxProvider; // TODO
+    private OpaClient opa;
+
+    // Fields needed for the middleware-specific functionality.
     private readonly RequestDelegate _next;
     private readonly ILogger<OpaAuthorizationMiddleware> _logger;
 
@@ -86,5 +100,61 @@ public class OpaAuthorizationMiddleware
         // // so we add the extra identity to the ClaimsPrincipal
         // context.User.AddIdentity(permissionsIdentity);
         await _next(context);
+    }
+
+    private Dictionary<string, object> makeRequestInput(HttpContext context)
+    {
+        var subjectId = context.User.Identity?.Name ?? "";
+        //var subjectDetails = context.User ?? "";
+        var subjectClaims = context.User.Claims;
+
+        string resourceId = context.Request.Path;
+        string actionName = context.Request.Method;
+        string actionProtocol = context.Request.Protocol;
+        Dictionary<string, string> headers = context.Request.Headers.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
+
+        string contextRemoteAddr = context.Connection.RemoteIpAddress?.ToString() ?? "";
+        string contextRemoteHost = context.Request.Host.ToString();
+        int contextRemotePort = context.Connection.RemotePort;
+
+        Dictionary<string, object> ctx = new Dictionary<string, object>() {
+            { "type", RequestContextType },
+            { "host", contextRemoteHost },
+            { "ip", contextRemoteAddr },
+            { "port", contextRemotePort },
+        };
+
+        // TODO: Add RequestContextProvider insert logic here.
+        // if (this.ctxProvider != null) {
+        //     Object contextData = this.ctxProvider.getContextData(authentication, object);
+        //     ctx.put("data", contextData);
+        // }
+
+        Dictionary<string, object> outMap = new Dictionary<string, object>() {
+            { "subject", new Dictionary<string, object>() {
+                { "type", SubjectType },
+                { "id", subjectId },
+                //{ "details", subjectDetails },
+                { "claims", subjectClaims },
+            }},
+            { "resource", new Dictionary<string, object>() {
+                { "type", RequestResourceType },
+                { "id", resourceId },
+            }},
+            { "action", new Dictionary<string, object>() {
+                { "name", actionName },
+                { "protocol", actionProtocol },
+                { "headers", headers },
+            }},
+            { "context", ctx },
+        };
+
+        return outMap;
+    }
+
+    private static OpaClient defaultOPAClient()
+    {
+        string opaURL = System.Environment.GetEnvironmentVariable("OPA_URL") ?? "http://localhost:8181";
+        return new OpaClient(opaURL);
     }
 }
