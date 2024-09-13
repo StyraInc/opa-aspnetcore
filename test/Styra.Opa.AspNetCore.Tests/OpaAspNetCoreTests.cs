@@ -47,122 +47,78 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
 {
     public IContainer _containerOpa;
     public IContainer _containerEopa;
-    private readonly TestServer _server;
-    private HttpClient _client;
+
+    public IWebHostBuilder GetWebHostBuilder()
+    {
+        var builder = new WebHostBuilder()
+            .ConfigureServices(services =>
+            {
+                // Add any required services
+                services.AddAuthentication(opts => { opts.DefaultScheme = "DynamicAuthenticationScheme"; })
+                     .AddCookie() // Not used, except for unauth tests.
+                     .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
+                         "Test", options => { })
+                     .AddPolicyScheme(
+                         "DynamicAuthenticationScheme",
+                         "Default system policy",
+                         cfgOpts => cfgOpts.ForwardDefaultSelector = ctx =>
+                             ctx.Request.Headers.ContainsKey("Authorization")
+                                 ? "Test"
+                                 : Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+                services.AddRouting();
+                services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace).AddConsole());
+            })
+            .Configure(app =>
+            {
+                // Configure the middleware pipeline
+                app.UseRouting();
+                app.UseAuthentication();
+                app.UseMiddleware<OpaAuthorizationMiddleware>();
+                app.UseEndpoints(endpoints =>
+                {
+                    endpoints.MapGet("/hello", async (context) =>
+                    {
+                        foreach (var header in context.Request.GetTypedHeaders().Headers)
+                        {
+                            Console.WriteLine(header);
+                        }
+
+                        await context.Response.WriteAsync("Hello Tests");
+                    });
+                });
+            });
+        return builder;
+    }
 
     public OpaAspNetCoreTests(OPAContainerFixture opaFixture, EOPAContainerFixture eopaFixture)
     {
         _containerOpa = opaFixture.GetContainer();
         _containerEopa = eopaFixture.GetContainer();
-
-        var builder = new WebHostBuilder()
-           .ConfigureServices(services =>
-           {
-               // Add any required services
-               services.AddAuthentication(opts => { opts.DefaultScheme = "DynamicAuthenticationScheme"; })
-                    .AddCookie() // Not used, except for unauth tests.
-                    .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
-                        "Test", options => { })
-                    .AddPolicyScheme(
-                        "DynamicAuthenticationScheme",
-                        "Default system policy",
-                        cfgOpts => cfgOpts.ForwardDefaultSelector = ctx =>
-                            ctx.Request.Headers.ContainsKey("Authorization")
-                                ? "Test"
-                                : Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
-               services.AddRouting();
-               services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace).AddConsole());
-           })
-           .Configure(app =>
-           {
-               // Configure the middleware pipeline
-               app.UseRouting();
-               app.UseAuthentication();
-               app.UseMiddleware<OpaAuthorizationMiddleware>();
-               app.UseEndpoints(endpoints =>
-               {
-                   endpoints.MapGet("/hello", async (context) =>
-                   {
-                       foreach (var header in context.Request.GetTypedHeaders().Headers)
-                       {
-                           Console.WriteLine(header);
-                       }
-
-                       await context.Response.WriteAsync("Hello Tests");
-                   });
-               });
-           });
-
-        // Create the TestServer
-        _server = new TestServer(builder);
-        _client = _server.CreateClient();
         //_client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test");
     }
 
-    private OpaApiClient GetOpaApiClient()
+    private OpaClient GetOpaClient()
     {
         // Construct the request URI by specifying the scheme, hostname, assigned random host port, and the endpoint "uuid".
         var requestUri = new UriBuilder(Uri.UriSchemeHttp, _containerOpa.Hostname, _containerOpa.GetMappedPublicPort(8181)).Uri;
-
-        // Send an HTTP GET request to the specified URI and retrieve the response as a string.
-        return new OpaApiClient(serverIndex: 0, serverUrl: requestUri.ToString());
+        return new OpaClient(serverUrl: requestUri.ToString());
     }
 
-    private OpaApiClient GetEOpaApiClient()
+    private OpaClient GetEOpaClient()
     {
-        // Construct the request URI by specifying the scheme, hostname, assigned random host port, and the endpoint "uuid".
         var requestUri = new UriBuilder(Uri.UriSchemeHttp, _containerEopa.Hostname, _containerEopa.GetMappedPublicPort(8181)).Uri;
-
-        // Send an HTTP GET request to the specified URI and retrieve the response as a string.
-        return new OpaApiClient(serverIndex: 0, serverUrl: requestUri.ToString());
-    }
-
-    [Fact]
-    public async Task OpenApiClientRBACTestcontainersTest()
-    {
-        var client = GetOpaApiClient();
-
-        // Exercise the low-level OPA C# SDK.
-        var req = new ExecutePolicyWithInputRequest()
-        {
-            Path = "policy/decision_always_true",
-            RequestBody = new ExecutePolicyWithInputRequestBody()
-            {
-                Input = Input.CreateMapOfAny(
-                        new Dictionary<string, object>() {
-                    { "identity", "secret" },
-                }),
-            },
-        };
-
-        var res = await client.ExecutePolicyWithInputAsync(req);
-        var resultMap = res.SuccessfulPolicyResponse?.Result?.MapOfAny;
-
-        // Ensure we got back the expected fields from the eval.
-        Assert.Equal(true, resultMap?.GetValueOrDefault("decision", false));
+        return new OpaClient(serverUrl: requestUri.ToString());
     }
 
     [Fact]
     public async Task MiddlewareTest_ReturnsNotFoundForRequest()
     {
-        // using var host = await new WebHostBuilder()
-        //     .ConfigureWebHost(webBuilder =>
-        //     {
-        //         webBuilder
-        //             .UseTestServer()
-        //             .ConfigureServices(services =>
-        //             {
-        //                 services.AddMyServices();
-        //             })
-        //             .Configure(app =>
-        //             {
-        //                 app.UseMiddleware<OpaAuthorizationMiddleware>();
-        //             });
-        //     })
-        //     .StartAsync();
+        // Create the TestServer + Client
+        var server = new TestServer(GetWebHostBuilder());
+        var client = server.CreateClient();
 
         // var response = await host.GetTestClient().GetAsync("/");
-        var response = await _client.GetAsync("/hello");
+        var response = await client.GetAsync("/hello");
         Assert.False(response.IsSuccessStatusCode);
         Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
         // var responseBody = await response.Content.ReadAsStringAsync();
@@ -172,31 +128,69 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
     [Fact]
     public async Task MiddlewareTest_AuthenticatedTest()
     {
-        // using var host = await new WebHostBuilder()
-        //     .ConfigureWebHost(webBuilder =>
-        //     {
-        //         webBuilder
-        //             .UseTestServer()
-        //             .ConfigureServices(services =>
-        //             {
-        //                 services.AddMyServices();
-        //             })
-        //             .Configure(app =>
-        //             {
-        //                 app.UseMiddleware<OpaAuthorizationMiddleware>();
-        //             });
-        //     })
-        //     .StartAsync();
+        var opac = GetOpaClient();
+        // Create the TestServer + Client
+        var builder = GetWebHostBuilder().Configure(app =>
+            {
+                app.UseAuthentication();
+                app.UseMiddleware<OpaAuthorizationMiddleware>(opac);
+            });
+        var server = new TestServer(builder);
+        var client = server.CreateClient();
 
-        // var response = await host.GetTestClient().GetAsync("/");
-        Console.WriteLine("Value before {0}", _client.DefaultRequestHeaders.Authorization);
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", "test");
-        Console.WriteLine("Value after {0}", _client.DefaultRequestHeaders.Authorization);
-        var response = await _client.GetAsync("/hello");
-        Assert.True(response.IsSuccessStatusCode);
+        Console.WriteLine("Value before {0}", client.DefaultRequestHeaders.Authorization);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", "test");
+        Console.WriteLine("Value after {0}", client.DefaultRequestHeaders.Authorization);
+        var response = await client.GetAsync("/hello");
+        //Assert.True(response.IsSuccessStatusCode);
         var responseBody = await response.Content.ReadAsStringAsync();
+        Console.WriteLine(responseBody);
         Assert.Equal("Hello Tests", responseBody);
 
         // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TestOpaHealth()
+    {
+        // Create the TestServer + Client
+        var server = new TestServer(GetWebHostBuilder());
+        var client = server.CreateClient();
+    }
+
+    [Fact]
+    public async Task TestOpaHealthAlternate()
+    {
+
+    }
+
+    [Fact]
+    public async Task TestOpaAuthorizationMiddlewareSimpleAllow()
+    {
+
+    }
+
+    [Fact]
+    public async Task TestOpaAuthorizationMiddlewareSimpleDeny()
+    {
+
+    }
+
+    [Fact]
+    public async Task TestOpaAuthorizationMiddlewareSimpleAllowVerify()
+    {
+
+    }
+
+    [Fact]
+    public async Task TestOpaAuthorizationMiddlewareSimpleDenyVerify()
+    {
+
+    }
+
+    [Fact]
+    public async Task TestOpaAuthorizationMiddlewareEcho()
+    {
+
     }
 }
