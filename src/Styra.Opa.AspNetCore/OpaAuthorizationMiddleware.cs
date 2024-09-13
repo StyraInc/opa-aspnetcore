@@ -257,7 +257,7 @@ public class OpaAuthorizationMiddleware
     private async Task<OpaResponse?> opaRequest(HttpContext context)
     {
         Dictionary<string, object> inputMap = makeRequestInput(context);
-        _logger.LogTrace("OPA input for request: {}", inputMap);
+        _logger.LogTrace("OPA input for request: {}", JsonConvert.SerializeObject(inputMap));
         OpaResponse? resp = null;
         try
         {
@@ -271,7 +271,7 @@ public class OpaAuthorizationMiddleware
                 _logger.LogTrace("Using default OPA path");
                 resp = await _opa.evaluateDefault<OpaResponse>(inputMap);
             }
-            _logger.LogTrace("OPA response is: {}", resp);
+            _logger.LogTrace("OPA response is: {}", JsonConvert.SerializeObject(resp));
         }
         catch (OpaException e)
         {

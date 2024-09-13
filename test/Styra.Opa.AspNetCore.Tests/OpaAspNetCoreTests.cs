@@ -128,26 +128,26 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
     [Fact]
     public async Task MiddlewareTest_AuthenticatedTest()
     {
-        var opac = GetOpaClient();
-        // Create the TestServer + Client
-        var builder = GetWebHostBuilder().Configure(app =>
-            {
-                app.UseAuthentication();
-                app.UseMiddleware<OpaAuthorizationMiddleware>(opac);
-            });
-        var server = new TestServer(builder);
-        var client = server.CreateClient();
+        // var opac = GetOpaClient();
+        // // Create the TestServer + Client
+        // var builder = GetWebHostBuilder().Configure(app =>
+        //     {
+        //         app.UseAuthentication();
+        //         app.UseMiddleware<OpaAuthorizationMiddleware>(opac);
+        //     });
+        // var server = new TestServer(builder);
+        // var client = server.CreateClient();
 
-        Console.WriteLine("Value before {0}", client.DefaultRequestHeaders.Authorization);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", "test");
-        Console.WriteLine("Value after {0}", client.DefaultRequestHeaders.Authorization);
-        var response = await client.GetAsync("/hello");
-        //Assert.True(response.IsSuccessStatusCode);
-        var responseBody = await response.Content.ReadAsStringAsync();
-        Console.WriteLine(responseBody);
-        Assert.Equal("Hello Tests", responseBody);
+        // Console.WriteLine("Value before {0}", client.DefaultRequestHeaders.Authorization);
+        // client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", "test");
+        // Console.WriteLine("Value after {0}", client.DefaultRequestHeaders.Authorization);
+        // var response = await client.GetAsync("/hello");
+        // //Assert.True(response.IsSuccessStatusCode);
+        // var responseBody = await response.Content.ReadAsStringAsync();
+        // Console.WriteLine(responseBody);
+        // Assert.Equal("Hello Tests", responseBody);
 
-        // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
+        // // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -167,30 +167,98 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
     [Fact]
     public async Task TestOpaAuthorizationMiddlewareSimpleAllow()
     {
+        var opac = GetOpaClient();
+        // Create the TestServer + Client
+        var builder = GetWebHostBuilder().Configure(app =>
+            {
+                // Configure the middleware pipeline
+                app.UseRouting();
+                app.UseAuthentication();
+                app.UseMiddleware<OpaAuthorizationMiddleware>(opac, "policy/decision_always_true");
+                app.UseEndpoints(endpoints =>
+                {
+                    endpoints.MapGet("/hello", async (context) => await context.Response.WriteAsync("Hello Tests"));
+                });
+            });
 
+        var server = new TestServer(builder);
+        var client = server.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", "test");
+
+        var response = await client.GetAsync("/hello");
+        Assert.True(response.IsSuccessStatusCode);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        Assert.Equal("Hello Tests", responseBody);
     }
 
     [Fact]
     public async Task TestOpaAuthorizationMiddlewareSimpleDeny()
     {
+        var opac = GetOpaClient();
+        // Create the TestServer + Client
+        var builder = GetWebHostBuilder().Configure(app =>
+            {
+                // Configure the middleware pipeline
+                app.UseRouting();
+                app.UseAuthentication();
+                app.UseMiddleware<OpaAuthorizationMiddleware>(opac, "policy/decision_always_false");
+                app.UseEndpoints(endpoints =>
+                {
+                    endpoints.MapGet("/hello", async (context) => await context.Response.WriteAsync("Hello Tests"));
+                });
+            });
 
-    }
+        var server = new TestServer(builder);
+        var client = server.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", "test");
 
-    [Fact]
-    public async Task TestOpaAuthorizationMiddlewareSimpleAllowVerify()
-    {
-
-    }
-
-    [Fact]
-    public async Task TestOpaAuthorizationMiddlewareSimpleDenyVerify()
-    {
-
+        var response = await client.GetAsync("/hello");
+        Assert.False(response.IsSuccessStatusCode);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Access denied", responseBody);
     }
 
     [Fact]
     public async Task TestOpaAuthorizationMiddlewareEcho()
     {
+        // By reading back the input, we can make sure the OPA input has the
+        // right structure and content.
+
+        // Dictionary<string, object> expectData = new Dictionary<string, object>() {
+        //     { "action", new Dictionary<string, object>() {
+        //         { "headers", new Dictionary<string, object>() {
+        //             { "UnitTestHeader", "123abc" },
+        //         }},
+        //         { "name", "GET" },
+        //         { "protocol", "HTTP/1.1" }
+        //     }},
+        //     { "context", new Dictionary<string, object>() {
+        //         { "host", "example.com" },
+        //         { "ip", "192.0.2.123" },
+        //         { "port", 0 },
+        //         { "type", "http" },
+        //         { "data", new Dictionary<string, object>() {
+        //             { "hello", "world" },
+        //         }}
+        //     }},
+        //     { "resource", new Dictionary<string, object>() {
+        //         { "id", "unit/test" },
+        //         { "type", "endpoint" },
+        //     }},
+        //     { "subject", new Dictionary<string, object>() {
+        //         { "claims", new List<object>() {
+        //             new Dictionary<string, object>() {{ "authority", "ROLE_USER" }},
+        //             new Dictionary<string, object>() {{ "authority", "ROLE_ADMIN" }}
+        //         }},
+        //         { "details", new Dictionary<string, object>() {
+        //             { "remoteAddress", "192.0.2.123" },
+        //             { "sessionId", "null" }
+        //         }},
+        //         { "id", "testuser" },
+        //         { "type", "java_authentication" }
+        //     }}
+        // };
+
 
     }
 }
