@@ -67,25 +67,6 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
                                  : Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
                 services.AddRouting();
                 services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace).AddConsole());
-            })
-            .Configure(app =>
-            {
-                // Configure the middleware pipeline
-                app.UseRouting();
-                app.UseAuthentication();
-                app.UseMiddleware<OpaAuthorizationMiddleware>();
-                app.UseEndpoints(endpoints =>
-                {
-                    endpoints.MapGet("/hello", async (context) =>
-                    {
-                        foreach (var header in context.Request.GetTypedHeaders().Headers)
-                        {
-                            Console.WriteLine(header);
-                        }
-
-                        await context.Response.WriteAsync("Hello Tests");
-                    });
-                });
             });
         return builder;
     }
@@ -148,20 +129,6 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         // Assert.Equal("Hello Tests", responseBody);
 
         // // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task TestOpaHealth()
-    {
-        // Create the TestServer + Client
-        var server = new TestServer(GetWebHostBuilder());
-        var client = server.CreateClient();
-    }
-
-    [Fact]
-    public async Task TestOpaHealthAlternate()
-    {
-
     }
 
     [Fact]
