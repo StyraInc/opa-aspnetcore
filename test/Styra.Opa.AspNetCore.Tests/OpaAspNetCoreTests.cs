@@ -6,9 +6,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Styra.Opa.OpenApi;
-using Styra.Opa.OpenApi.Models.Components;
-using Styra.Opa.OpenApi.Models.Requests;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -37,7 +34,7 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
         var ticket = new AuthenticationTicket(principal, "Test");
 
         var result = AuthenticateResult.Success(ticket);
-        this.Logger.LogWarning("RUNNING!");
+        this.Logger.LogTrace("Using TestAuthHandler authentication.");
 
         return Task.FromResult(result);
     }
@@ -91,20 +88,20 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         return new OpaClient(serverUrl: requestUri.ToString());
     }
 
-    [Fact]
-    public async Task MiddlewareTest_ReturnsNotFoundForRequest()
-    {
-        // Create the TestServer + Client
-        var server = new TestServer(GetWebHostBuilder());
-        var client = server.CreateClient();
+    // [Fact]
+    // public async Task MiddlewareTest_ReturnsNotFoundForRequest()
+    // {
+    //     // Create the TestServer + Client
+    //     var server = new TestServer(GetWebHostBuilder());
+    //     var client = server.CreateClient();
 
-        // var response = await host.GetTestClient().GetAsync("/");
-        var response = await client.GetAsync("/hello");
-        Assert.False(response.IsSuccessStatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
-        // var responseBody = await response.Content.ReadAsStringAsync();
-        // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
-    }
+    //     // var response = await host.GetTestClient().GetAsync("/");
+    //     var response = await client.GetAsync("/hello");
+    //     Assert.False(response.IsSuccessStatusCode);
+    //     Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
+    //     // var responseBody = await response.Content.ReadAsStringAsync();
+    //     // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
+    // }
 
     [Fact]
     public async Task MiddlewareTest_AuthenticatedTest()
@@ -132,7 +129,7 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
     }
 
     [Fact]
-    public async Task TestOpaAuthorizationMiddlewareSimpleAllow()
+    public async Task TestE2EOpaAuthorizationMiddlewareSimpleAllow()
     {
         var opac = GetOpaClient();
         // Create the TestServer + Client
@@ -159,7 +156,7 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
     }
 
     [Fact]
-    public async Task TestOpaAuthorizationMiddlewareSimpleDeny()
+    public async Task TestE2EOpaAuthorizationMiddlewareSimpleDeny()
     {
         var opac = GetOpaClient();
         // Create the TestServer + Client

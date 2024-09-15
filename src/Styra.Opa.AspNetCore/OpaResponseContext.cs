@@ -7,16 +7,16 @@ public class OpaResponseContext
 {
 
     [JsonProperty("id")]
-    private string? id { get; set; }
+    private string? ID { get; set; }
 
     [JsonProperty("reason_admin")]
-    private Dictionary<string, string>? reasonAdmin { get; set; }
+    private Dictionary<string, string>? ReasonAdmin { get; set; }
 
     [JsonProperty("reason_user")]
-    private Dictionary<string, string>? reasonUser { get; set; }
+    private Dictionary<string, string>? ReasonUser { get; set; }
 
     [JsonProperty("data")]
-    private Dictionary<string, object>? data { get; set; }
+    private Dictionary<string, object>? Data { get; set; }
 
     /// <summary>
     ///  This method selects an appropriate reason to use for creating ASP.NET Core
@@ -27,16 +27,16 @@ public class OpaResponseContext
     /// </summary>
     public string? GetReasonForDecision(string searchKey)
     {
-        if (reasonUser == null)
+        if (ReasonUser is null)
         {
             return null;
         }
 
-        if (reasonUser.TryGetValue(searchKey, out string reason))
+        if (ReasonUser.TryGetValue(searchKey, out string reason))
         {
             return reason;
         }
 
-        return reasonUser?.Keys.OrderBy(k => k).FirstOrDefault();
+        return ReasonUser?.Keys.OrderBy(k => k).FirstOrDefault();
     }
 }

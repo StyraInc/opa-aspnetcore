@@ -1,45 +1,12 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Styra.Opa.AspNetCore;
-
-/// <summary>
-///  This interface can be used to expose additional information to the OPA
-///  policy via the context field. Data returned by GetContextData() is placed
-///  in input.context.data. The returned object must be JSON serializeable.
-/// </summary>
-interface IContextDataProvider
-{
-    object GetContextData();
-}
-
-/// <summary>
-///  This helper class allows creating a ContextDataProvider which always returns
-///  the same constant value. This is useful for tests, and also for situations
-///  where the extra data to inject does not change during runtime
-/// </summary>
-public class ConstantContextDataProvider : IContextDataProvider
-{
-    private object data;
-
-    public ConstantContextDataProvider(object newData)
-    {
-        data = newData;
-    }
-
-    public object GetContextData()
-    {
-        return data;
-    }
-}
 
 public static class HttpContextExtensions
 {
@@ -88,8 +55,9 @@ public class OpaAuthorizationMiddleware
     /// </summary>
     private string reasonKey { get; set; }
 
-    //private ContextDataProvider ctxProvider; // TODO
     private OpaClient _opa;
+
+    private IContextDataProvider? _contextProvider;
 
     // Fields needed for the middleware-specific functionality.
     private readonly RequestDelegate _next;
@@ -101,7 +69,7 @@ public class OpaAuthorizationMiddleware
     {
         _next = next;
         _logger = logger;
-        _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
+        _logger.LogInformation("AAA OpaAuthorizationMiddleware initialized.");
         _opa = defaultOPAClient();
         reasonKey = "en";
     }
@@ -113,41 +81,38 @@ public class OpaAuthorizationMiddleware
     {
         _next = next;
         _logger = logger;
-        _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
         _opa = opa;
         reasonKey = "en";
+        _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
     }
 
+    // Named optional parameters allow the user to be selective at object creation time.
     public OpaAuthorizationMiddleware(
         RequestDelegate next,
         ILogger<OpaAuthorizationMiddleware> logger,
-        OpaClient opa,
-        string opaPath)
+        OpaClient? opa = null,
+        string? opaPath = null,
+        IContextDataProvider? dataProvider = null)
     {
         _next = next;
         _logger = logger;
-        _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
-        _opa = opa;
+        _opa = opa ?? defaultOPAClient();
         _opaPath = opaPath;
+        _contextProvider = dataProvider;
         reasonKey = "en";
+        _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
     }
 
-    public OpaAuthorizationMiddleware(
-        RequestDelegate next,
-        ILogger<OpaAuthorizationMiddleware> logger,
-        string opaPath)
-    {
-        _next = next;
-        _logger = logger;
-        _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
-        _opa = defaultOPAClient();
-        _opaPath = opaPath;
-        reasonKey = "en";
-    }
+    // TODO: Add ServiceProvider variants, to allow for app-wide DI to work.
 
-    // TODO: Add the ContextDataProvider combinations.
-    // TODO: Add serviceprovider variants, to allow for app-wide DI to work.
-
+    /// <summary>
+    /// InvokeAsync hooks into the middleware pipeline for a request, and
+    /// either rejects the request with an Access Denied response, or
+    /// allows it through to other middleware or the main application to
+    /// process further.
+    /// </summary>
+    /// <param name="context">HttpContext for the incoming request.</param>
+    /// <returns></returns>
     public async Task InvokeAsync(HttpContext context)
     {
         var cancellationToken = context.RequestAborted;
@@ -194,11 +159,11 @@ public class OpaAuthorizationMiddleware
         await _next(context);
     }
 
-    private Dictionary<string, object> makeRequestInput(HttpContext context)
+    private Dictionary<string, object> MakeRequestInput(HttpContext context)
     {
         var subjectId = context.User.Identity?.Name ?? "";
-        //var subjectDetails = context.User ?? "";
-        var subjectClaims = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(context.User.Claims, new JsonSerializerSettings { ReferenceLoopHandling = ReferenceLoopHandling.Ignore }));
+        //var subjectDetails = principal ?? "";
+        var subjectClaims = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(context.User.Claims, new JsonSerializerSettings { ReferenceLoopHandling = ReferenceLoopHandling.Ignore })) ?? new { };
 
         string resourceId = context.Request.Path;
         string actionName = context.Request.Method;
@@ -216,17 +181,16 @@ public class OpaAuthorizationMiddleware
             { "port", contextRemotePort },
         };
 
-        // TODO: Add RequestContextProvider insert logic here.
-        // if (this.ctxProvider != null) {
-        //     Object contextData = this.ctxProvider.getContextData(authentication, object);
-        //     ctx.put("data", contextData);
-        // }
+        if (_contextProvider is not null)
+        {
+            object contextData = _contextProvider.GetContextData(context);
+            ctx.Add("data", contextData);
+        }
 
         Dictionary<string, object> outMap = new Dictionary<string, object>() {
             { "subject", new Dictionary<string, object>() {
                 { "type", SubjectType },
                 { "id", subjectId },
-                //{ "details", subjectDetails },
                 { "claims", subjectClaims },
             }},
             { "resource", new Dictionary<string, object>() {
@@ -256,7 +220,7 @@ public class OpaAuthorizationMiddleware
     /// </summary>
     private async Task<OpaResponse?> opaRequest(HttpContext context)
     {
-        Dictionary<string, object> inputMap = makeRequestInput(context);
+        Dictionary<string, object> inputMap = MakeRequestInput(context);
         _logger.LogTrace("OPA input for request: {}", JsonConvert.SerializeObject(inputMap));
         OpaResponse? resp = null;
         try
