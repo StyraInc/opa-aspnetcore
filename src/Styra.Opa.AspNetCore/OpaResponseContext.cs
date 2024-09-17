@@ -32,7 +32,7 @@ public class OpaResponseContext
             return null;
         }
 
-        if (ReasonUser.TryGetValue(searchKey, out string reason))
+        if (ReasonUser.TryGetValue(searchKey, out string? reason))
         {
             return reason;
         }
