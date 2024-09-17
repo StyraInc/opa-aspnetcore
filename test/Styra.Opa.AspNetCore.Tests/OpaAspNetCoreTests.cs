@@ -2,10 +2,13 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Features.Authentication;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -88,46 +91,6 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         return new OpaClient(serverUrl: requestUri.ToString());
     }
 
-    // [Fact]
-    // public async Task MiddlewareTest_ReturnsNotFoundForRequest()
-    // {
-    //     // Create the TestServer + Client
-    //     var server = new TestServer(GetWebHostBuilder());
-    //     var client = server.CreateClient();
-
-    //     // var response = await host.GetTestClient().GetAsync("/");
-    //     var response = await client.GetAsync("/hello");
-    //     Assert.False(response.IsSuccessStatusCode);
-    //     Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
-    //     // var responseBody = await response.Content.ReadAsStringAsync();
-    //     // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
-    // }
-
-    [Fact]
-    public async Task MiddlewareTest_AuthenticatedTest()
-    {
-        // var opac = GetOpaClient();
-        // // Create the TestServer + Client
-        // var builder = GetWebHostBuilder().Configure(app =>
-        //     {
-        //         app.UseAuthentication();
-        //         app.UseMiddleware<OpaAuthorizationMiddleware>(opac);
-        //     });
-        // var server = new TestServer(builder);
-        // var client = server.CreateClient();
-
-        // Console.WriteLine("Value before {0}", client.DefaultRequestHeaders.Authorization);
-        // client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", "test");
-        // Console.WriteLine("Value after {0}", client.DefaultRequestHeaders.Authorization);
-        // var response = await client.GetAsync("/hello");
-        // //Assert.True(response.IsSuccessStatusCode);
-        // var responseBody = await response.Content.ReadAsStringAsync();
-        // Console.WriteLine(responseBody);
-        // Assert.Equal("Hello Tests", responseBody);
-
-        // // Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
     [Fact]
     public async Task TestE2EOpaAuthorizationMiddlewareSimpleAllow()
     {
@@ -183,46 +146,109 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
     }
 
     [Fact]
-    public async Task TestOpaAuthorizationMiddlewareEcho()
+    public async Task TestMiddlewareJSONFormatEcho()
     {
         // By reading back the input, we can make sure the OPA input has the
         // right structure and content.
+        Dictionary<string, object> expectData = new Dictionary<string, object>() {
+            { "action", new Dictionary<string, object>() {
+                { "headers", new Dictionary<string, object>() {
+                    { "UnitTestHeader", "123abc" },
+                }},
+                { "name", "GET" },
+                { "protocol", "HTTP/1.1" }
+            }},
+            { "context", new Dictionary<string, object>() {
+                { "host", "example.com" },
+                { "ip", "192.0.2.123" },
+                { "port", 0 },
+                { "type", "http" },
+                { "data", new Dictionary<string, object>() {
+                    { "hello", "world" },
+                }}
+            }},
+            { "resource", new Dictionary<string, object>() {
+                { "id", "unit/test" },
+                { "type", "endpoint" },
+            }},
+            { "subject", new Dictionary<string, object>() {
+                { "claims", new List<object>() {
+                    new Dictionary<string, object>() {{ "authority", "ROLE_USER" }},
+                    new Dictionary<string, object>() {{ "authority", "ROLE_ADMIN" }}
+                }},
+                { "details", new Dictionary<string, object>() {
+                    { "remoteAddress", "192.0.2.123" },
+                    { "sessionId", "null" }
+                }},
+                { "id", "testuser" },
+                { "type", "aspnetcore_authentication" }
+            }}
+        };
 
-        // Dictionary<string, object> expectData = new Dictionary<string, object>() {
-        //     { "action", new Dictionary<string, object>() {
-        //         { "headers", new Dictionary<string, object>() {
-        //             { "UnitTestHeader", "123abc" },
-        //         }},
-        //         { "name", "GET" },
-        //         { "protocol", "HTTP/1.1" }
-        //     }},
-        //     { "context", new Dictionary<string, object>() {
-        //         { "host", "example.com" },
-        //         { "ip", "192.0.2.123" },
-        //         { "port", 0 },
-        //         { "type", "http" },
-        //         { "data", new Dictionary<string, object>() {
-        //             { "hello", "world" },
-        //         }}
-        //     }},
-        //     { "resource", new Dictionary<string, object>() {
-        //         { "id", "unit/test" },
-        //         { "type", "endpoint" },
-        //     }},
-        //     { "subject", new Dictionary<string, object>() {
-        //         { "claims", new List<object>() {
-        //             new Dictionary<string, object>() {{ "authority", "ROLE_USER" }},
-        //             new Dictionary<string, object>() {{ "authority", "ROLE_ADMIN" }}
-        //         }},
-        //         { "details", new Dictionary<string, object>() {
-        //             { "remoteAddress", "192.0.2.123" },
-        //             { "sessionId", "null" }
-        //         }},
-        //         { "id", "testuser" },
-        //         { "type", "java_authentication" }
-        //     }}
-        // };
+        OpaResponseContext expectCtx = new OpaResponseContext();
+        expectCtx.ReasonUser = new Dictionary<string, string>() {
+            { "en", "echo rule always allows" },
+            { "other", "other reason key" },
+        };
+        expectCtx.ID = "0";
+        expectCtx.Data = expectData;
+
+        OpaResponse expect = new OpaResponse();
+        expect.Decision = true;
+        expect.Context = expectCtx;
+
+        IContextDataProvider prov = new ConstantContextDataProvider(new Dictionary<string, string>() {
+            { "hello", "world" }
+        });
 
 
+        var opac = GetOpaClient();
+        var middleware = new OpaAuthorizationMiddleware(new RequestDelegate((HttpContext hc) => { return Task.CompletedTask; }), null, opac, "policy/echo", prov);
+
+        // Generate the extensive mocking required for the request to be processed correctly.
+        var features = new FeatureCollection();
+        // Mock the HttpConnection.
+        features.Set<IHttpConnectionFeature>(new HttpConnectionFeature
+        {
+            RemoteIpAddress = IPAddress.Parse("192.0.2.123"),
+            RemotePort = 0,
+        });
+        // Mock the HttpRequest.
+        features.Set<IHttpRequestFeature>(new HttpRequestFeature
+        {
+            Method = "GET",
+            Path = "/unit/test",
+        });
+        // Mock the ClaimsPrincipal.
+        var claims = new List<Claim>()
+        {
+            new Claim(ClaimTypes.Name, "testuser"),
+            new Claim(ClaimTypes.Role, "Admin"),
+            new Claim(ClaimTypes.Role, "User"),
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuthType");
+        var claimsPrincipal = new ClaimsPrincipal(identity);
+        features.Set<IHttpAuthenticationFeature>(new HttpAuthenticationFeature
+        {
+            User = claimsPrincipal
+        });
+        // Pull it all together into the mocked HttpContext.
+        var httpContext = new DefaultHttpContext(features);
+
+        var actual = await middleware.OpaRequest(httpContext);
+        if (actual is null)
+        {
+            Assert.Fail("Test received a null OpaResponse");
+        }
+
+        // TODO: Add JSON diffing, as in the OPA Spring Boot SDK.
+
+        Assert.Equal(expect.Decision, actual.Decision);
+        Assert.Equal(expect.Context.ID, actual.Context?.ID);
+        Assert.Equal(expect.Context.ReasonUser, actual.Context?.ReasonUser);
+
+        Assert.Equal("echo rule always allows", actual.GetReasonForDecision("en"));
+        Assert.Equal("other reason key", actual.GetReasonForDecision("other"));
+        Assert.Equal("echo rule always allows", actual.GetReasonForDecision("nonexistant"));
     }
 }

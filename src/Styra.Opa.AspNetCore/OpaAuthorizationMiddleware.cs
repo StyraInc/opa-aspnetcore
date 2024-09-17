@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,6 +11,17 @@ namespace Styra.Opa.AspNetCore;
 
 public static class HttpContextExtensions
 {
+    /// <summary>
+    /// This extension method automates the process of returning customized
+    /// Access Denied responses, optionally including a user-visible reason
+    /// for the denial.
+    /// </summary>
+    /// <param name="context"><c>HttpContext</c> that we're using to write the response.</param>
+    /// <param name="title">Error type message.</param>
+    /// <param name="reason">The detailed reason for the denied request. (default: <c>"Access denied"</c>)</param>
+    /// <param name="statusCode">The HTTP status code for the error. (default: <c>403</c>)</param>
+    /// <param name="cancellationToken"><c>CancellationToken</c> for the async write.</param>
+    /// <returns></returns>
     public static async ValueTask WriteAccessDeniedResponse(
         this HttpContext context,
         string? title = null,
@@ -49,11 +61,11 @@ public class OpaAuthorizationMiddleware
 
     /// <summary>
     /// The "preferred" key where the access decision reason should be
-    /// searched for in the OpaResponse object. A default value of 'en' is used.
+    /// searched for in the <c>OpaResponse</c> object. A default value of 'en' is used.
     /// If the selected key is not present in the response, the lexicographically
     /// first key is used instead from the sorted key list.
     /// </summary>
-    private string reasonKey { get; set; }
+    public string ReasonKey = "en";
 
     private OpaClient _opa;
 
@@ -63,43 +75,31 @@ public class OpaAuthorizationMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<OpaAuthorizationMiddleware> _logger;
 
+    /// <summary>
+    /// This middleware class is designed to hook into the ASP.NET Core
+    /// request processing pipeline, and allows OPA decisions to drive
+    /// request authorization decisions.
+    /// 
+    /// If a request is rejected, this middleware class will write an
+    /// Access Denied response, and will abort further request processing.
+    /// </summary>
+    /// <param name="next"><c>RequestDelegate</c> from ASP.NET Core.</param>
+    /// <param name="logger">Optional logger for the middleware to use.</param>
+    /// <param name="opa">Optional <c>OpaClient</c> to use for request authorization.</param>
+    /// <param name="opaPath">Optional rule path for the <c>OpaClient</c> to query against.</param>
+    /// <param name="dataProvider">Optional data provider. Injects additional context into the OPA query under <c>input.context.data</c></param>
     public OpaAuthorizationMiddleware(
         RequestDelegate next,
-        ILogger<OpaAuthorizationMiddleware> logger)
-    {
-        _next = next;
-        _logger = logger;
-        _logger.LogInformation("AAA OpaAuthorizationMiddleware initialized.");
-        _opa = defaultOPAClient();
-        reasonKey = "en";
-    }
-
-    public OpaAuthorizationMiddleware(
-        RequestDelegate next,
-        ILogger<OpaAuthorizationMiddleware> logger,
-        OpaClient opa)
-    {
-        _next = next;
-        _logger = logger;
-        _opa = opa;
-        reasonKey = "en";
-        _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
-    }
-
-    // Named optional parameters allow the user to be selective at object creation time.
-    public OpaAuthorizationMiddleware(
-        RequestDelegate next,
-        ILogger<OpaAuthorizationMiddleware> logger,
+        ILogger<OpaAuthorizationMiddleware>? logger = null,
         OpaClient? opa = null,
         string? opaPath = null,
         IContextDataProvider? dataProvider = null)
     {
         _next = next;
-        _logger = logger;
-        _opa = opa ?? defaultOPAClient();
+        _logger = logger ?? new NullLogger<OpaAuthorizationMiddleware>();
+        _opa = opa ?? DefaultOPAClient();
         _opaPath = opaPath;
         _contextProvider = dataProvider;
-        reasonKey = "en";
         _logger.LogInformation("OpaAuthorizationMiddleware initialized.");
     }
 
@@ -112,7 +112,6 @@ public class OpaAuthorizationMiddleware
     /// process further.
     /// </summary>
     /// <param name="context">HttpContext for the incoming request.</param>
-    /// <returns></returns>
     public async Task InvokeAsync(HttpContext context)
     {
         var cancellationToken = context.RequestAborted;
@@ -130,7 +129,7 @@ public class OpaAuthorizationMiddleware
         }
 
         // Launch OPA request, default-deny if null response.
-        OpaResponse? resp = await opaRequest(context);
+        OpaResponse? resp = await OpaRequest(context);
         if (resp is null)
         {
             _logger.LogTrace("OPA provided a null response, default-denying access");
@@ -144,7 +143,7 @@ public class OpaAuthorizationMiddleware
 
         // Allow/Deny based on the decision.
         bool allow = resp.Decision;
-        string reason = resp.GetReasonForDecision(reasonKey) ?? "access denied by policy";
+        string reason = resp.GetReasonForDecision(ReasonKey) ?? "access denied by policy";
         if (!allow)
         {
             await context.WriteAccessDeniedResponse(
@@ -159,7 +158,7 @@ public class OpaAuthorizationMiddleware
         await _next(context);
     }
 
-    private Dictionary<string, object> MakeRequestInput(HttpContext context)
+    public Dictionary<string, object> MakeRequestInput(HttpContext context)
     {
         var subjectId = context.User.Identity?.Name ?? "";
         //var subjectDetails = principal ?? "";
@@ -208,7 +207,7 @@ public class OpaAuthorizationMiddleware
         return outMap;
     }
 
-    private static OpaClient defaultOPAClient()
+    private static OpaClient DefaultOPAClient()
     {
         string opaURL = System.Environment.GetEnvironmentVariable("OPA_URL") ?? "http://localhost:8181";
         return new OpaClient(opaURL);
@@ -217,10 +216,16 @@ public class OpaAuthorizationMiddleware
     /// <summary>
     /// This method abstracts over the OPA evaluation, and automatically
     /// selects the default rule, or a rule based on the provided path.
+    ///
+    /// You should consider using the OPA C# SDK (which the OPA ASP.NET
+    /// Core SDK depends on) directly rather than using this method, as
+    /// it should not be needed during normal use.
     /// </summary>
-    private async Task<OpaResponse?> opaRequest(HttpContext context)
+    /// <param name="context">The HttpContext to use for building the OPA authorization request.</param>
+    /// <returns>OpaResponse on success; null otherwise.</returns>
+    public async Task<OpaResponse?> OpaRequest(HttpContext context)
     {
-        Dictionary<string, object> inputMap = MakeRequestInput(context);
+        var inputMap = MakeRequestInput(context);
         _logger.LogTrace("OPA input for request: {}", JsonConvert.SerializeObject(inputMap));
         OpaResponse? resp = null;
         try

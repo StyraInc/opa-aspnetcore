@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using Newtonsoft.Json;
 
 namespace Styra.Opa.AspNetCore;
@@ -7,16 +9,16 @@ public class OpaResponseContext
 {
 
     [JsonProperty("id")]
-    private string? ID { get; set; }
+    public string? ID;
 
     [JsonProperty("reason_admin")]
-    private Dictionary<string, string>? ReasonAdmin { get; set; }
+    public Dictionary<string, string>? ReasonAdmin;
 
     [JsonProperty("reason_user")]
-    private Dictionary<string, string>? ReasonUser { get; set; }
+    public Dictionary<string, string>? ReasonUser;
 
     [JsonProperty("data")]
-    private Dictionary<string, object>? Data { get; set; }
+    public Dictionary<string, object>? Data;
 
     /// <summary>
     ///  This method selects an appropriate reason to use for creating ASP.NET Core
@@ -37,6 +39,12 @@ public class OpaResponseContext
             return reason;
         }
 
-        return ReasonUser?.Keys.OrderBy(k => k).FirstOrDefault();
+        var firstKey = ReasonUser.Keys.OrderBy(k => k).FirstOrDefault();
+        if (firstKey is null)
+        {
+            return null;
+        }
+
+        return ReasonUser.GetValueOrDefault(firstKey);
     }
 }

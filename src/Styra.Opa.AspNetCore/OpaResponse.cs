@@ -7,10 +7,10 @@ public class OpaResponse
 {
 
     [JsonProperty("decision")]
-    public bool Decision { get; set; }
+    public bool Decision;
 
     [JsonProperty("context")]
-    public OpaResponseContext? Context { get; set; }
+    public OpaResponseContext? Context;
 
     /// <summary>
     ///  Wraps OPAResponseContext.GetReasonForDecision(). If the context is
