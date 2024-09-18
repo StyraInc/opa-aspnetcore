@@ -9,14 +9,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Encodings.Web;
 
 namespace Styra.Opa.AspNetCore.Tests;
 
-// 
 // Source: https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-3.1#mock-authentication
 public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
@@ -75,7 +76,6 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
     {
         _containerOpa = opaFixture.GetContainer();
         _containerEopa = eopaFixture.GetContainer();
-        //_client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test");
     }
 
     private OpaClient GetOpaClient()
@@ -159,7 +159,8 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
                 { "protocol", "HTTP/1.1" }
             }},
             { "context", new Dictionary<string, object>() {
-                { "host", "example.com" },
+                { "host", "" },
+                // { "host", "example.com" }, // Note(philip): This isn't avaailable in the IHttpRequestFeature mock.
                 { "ip", "192.0.2.123" },
                 { "port", 0 },
                 { "type", "http" },
@@ -168,17 +169,30 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
                 }}
             }},
             { "resource", new Dictionary<string, object>() {
-                { "id", "unit/test" },
+                { "id", "/unit/test" },
                 { "type", "endpoint" },
             }},
             { "subject", new Dictionary<string, object>() {
                 { "claims", new List<object>() {
-                    new Dictionary<string, object>() {{ "authority", "ROLE_USER" }},
-                    new Dictionary<string, object>() {{ "authority", "ROLE_ADMIN" }}
-                }},
-                { "details", new Dictionary<string, object>() {
-                    { "remoteAddress", "192.0.2.123" },
-                    { "sessionId", "null" }
+                    new Dictionary<string, object>() {
+                        { "Issuer", "LOCAL AUTHORITY" },
+                        { "OriginalIssuer", "LOCAL AUTHORITY" },
+                        { "Properties", new Dictionary<string, object>() },
+                        { "Type", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name" },
+                        { "Subject", new Dictionary<string, object> () {
+                            { "Actor", null! },
+                            { "AuthenticationType", "TestAuthType" },
+                            { "BootstrapContext", null! },
+                            { "Claims", new List<object>() },
+                            { "IsAuthenticated", true },
+                            { "Label", null! },
+                            { "Name", "testuser" },
+                            { "NameClaimType", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name" },
+                            { "RoleClaimType", "http://schemas.microsoft.com/ws/2008/06/identity/claims/role" },
+                        }},
+                        { "Value", "testuser" },
+                        { "ValueType", "http://www.w3.org/2001/XMLSchema#string" },
+                    },
                 }},
                 { "id", "testuser" },
                 { "type", "aspnetcore_authentication" }
@@ -196,6 +210,7 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         OpaResponse expect = new OpaResponse();
         expect.Decision = true;
         expect.Context = expectCtx;
+        string expectedJson = JsonConvert.SerializeObject(expect, Formatting.Indented);
 
         IContextDataProvider prov = new ConstantContextDataProvider(new Dictionary<string, string>() {
             { "hello", "world" }
@@ -216,15 +231,15 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         // Mock the HttpRequest.
         features.Set<IHttpRequestFeature>(new HttpRequestFeature
         {
+            Protocol = "HTTP/1.1",
             Method = "GET",
             Path = "/unit/test",
+            Headers = new HeaderDictionary() { { "UnitTestHeader", "123abc" }, }
         });
         // Mock the ClaimsPrincipal.
         var claims = new List<Claim>()
         {
             new Claim(ClaimTypes.Name, "testuser"),
-            new Claim(ClaimTypes.Role, "Admin"),
-            new Claim(ClaimTypes.Role, "User"),
         };
         var identity = new ClaimsIdentity(claims, "TestAuthType");
         var claimsPrincipal = new ClaimsPrincipal(identity);
@@ -241,7 +256,12 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
             Assert.Fail("Test received a null OpaResponse");
         }
 
-        // TODO: Add JSON diffing, as in the OPA Spring Boot SDK.
+        string actualJson = JsonConvert.SerializeObject(actual, Formatting.Indented);
+        string diff = JsonDiffer.Diff(JObject.Parse(expectedJson), JObject.Parse(actualJson));
+        if (diff.Length > 0)
+        {
+            Assert.Fail(string.Format("Unexpected difference between expected and actual Json (+want/-got):\n{0}", diff));
+        }
 
         Assert.Equal(expect.Decision, actual.Decision);
         Assert.Equal(expect.Context.ID, actual.Context?.ID);
@@ -250,5 +270,97 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         Assert.Equal("echo rule always allows", actual.GetReasonForDecision("en"));
         Assert.Equal("other reason key", actual.GetReasonForDecision("other"));
         Assert.Equal("echo rule always allows", actual.GetReasonForDecision("nonexistant"));
+    }
+}
+
+// Thanks to perplexity.ai for this class definition.
+public class JsonDiffer
+{
+    public static string Diff(JToken left, JToken right, string path = "")
+    {
+        var sb = new StringBuilder();
+
+        if (JToken.DeepEquals(left, right))
+        {
+            return sb.ToString();
+        }
+
+        if (left.Type != right.Type)
+        {
+            sb.AppendLine($"- {path}: {left}");
+            sb.AppendLine($"+ {path}: {right}");
+            return sb.ToString();
+        }
+
+        switch (left.Type)
+        {
+            case JTokenType.Object:
+                DiffObjects((left as JObject)!, (right as JObject)!, path, sb);
+                break;
+            case JTokenType.Array:
+                DiffArrays((left as JArray)!, (right as JArray)!, path, sb);
+                break;
+            default:
+                if (!JToken.DeepEquals(left, right))
+                {
+                    sb.AppendLine($"- {path}: {left}");
+                    sb.AppendLine($"+ {path}: {right}");
+                }
+                break;
+        }
+
+        return sb.ToString();
+    }
+
+    private static void DiffObjects(JObject left, JObject right, string path, StringBuilder sb)
+    {
+        var addedKeys = right.Properties().Select(p => p.Name).Except(left.Properties().Select(p => p.Name));
+        var removedKeys = left.Properties().Select(p => p.Name).Except(right.Properties().Select(p => p.Name));
+        var commonKeys = left.Properties().Select(p => p.Name).Intersect(right.Properties().Select(p => p.Name));
+
+        foreach (var key in addedKeys)
+        {
+            sb.AppendLine($"+ {CombinePath(path, key)}: {right[key]}");
+        }
+
+        foreach (var key in removedKeys)
+        {
+            sb.AppendLine($"- {CombinePath(path, key)}: {left[key]}");
+        }
+
+        foreach (var key in commonKeys)
+        {
+            sb.Append(Diff(left[key]!, right[key]!, CombinePath(path, key)));
+        }
+    }
+
+    private static void DiffArrays(JArray left, JArray right, string path, StringBuilder sb)
+    {
+        var minLength = Math.Min(left.Count, right.Count);
+
+        for (int i = 0; i < minLength; i++)
+        {
+            sb.Append(Diff(left[i], right[i], $"{path}[{i}]"));
+        }
+
+        if (left.Count < right.Count)
+        {
+            for (int i = left.Count; i < right.Count; i++)
+            {
+                sb.AppendLine($"+ {path}[{i}]: {right[i]}");
+            }
+        }
+        else if (left.Count > right.Count)
+        {
+            for (int i = right.Count; i < left.Count; i++)
+            {
+                sb.AppendLine($"- {path}[{i}]: {left[i]}");
+            }
+        }
+    }
+
+    private static string CombinePath(string basePath, string key)
+    {
+        return string.IsNullOrEmpty(basePath) ? key : $"{basePath}.{key}";
     }
 }
