@@ -3,69 +3,44 @@
 > [!IMPORTANT]
 > The documentation for this SDK lives at [https://docs.styra.com/sdk](https://docs.styra.com/sdk), with reference documentation available at [https://styrainc.github.io/opa-aspnetcore/docs](https://styrainc.github.io/opa-aspnetcore/docs)
 
-You can use the Styra OPA ASP.NET Core SDK to connect [Open Policy Agent](https://www.openpolicyagent.org/) and [Enterprise OPA](https://www.styra.com/enterprise-opa/) deployments to your [ASP.NET Core](https://spring.io/projects/spring-boot) applications using the included [AuthorizationManager](https://docs.spring.io/spring-security/reference/servlet/authorization/architecture.html#_the_authorizationmanager) implementation.
+You can use the Styra OPA ASP.NET Core SDK to connect [Open Policy Agent](https://www.openpolicyagent.org/) and [Enterprise OPA](https://www.styra.com/enterprise-opa/) deployments to your [ASP.NET Core](https://spring.io/projects/spring-boot) applications using the included [Middleware](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/?view=aspnetcore-8.0) implementation.
 
 > [!IMPORTANT]
 > Would you prefer a plain C# API instead of ASP.NET Core? Check out the [OPA C# SDK](https://github.com/StyraInc/opa-csharp).
 
-## SDK Installation
+<!--## SDK Installation
 
-This package is published on Maven Central as [`com.styra.opa/springboot`](https://central.sonatype.com/artifact/com.styra.opa/springboot). The Maven Central page includes up-to-date instructions to add it as a dependency to your Java project, tailored to a variety of build systems including Maven and Gradle.
+This package is published on NuGet as [`Styra.Opa.AspNetCore`](https://www.nuget.org/packages/Styra.Opa.AspNetCore). The NuGet page includes up-to-date instructions on how to add it as a dependency to your C# project.
 
-If you wish to build from source and publish the SDK artifact to your local Maven repository (on your filesystem) then use the following command (after cloning the git repo locally):
-
-On Linux/MacOS:
-
-```shell
-./gradlew publishToMavenLocal -Pskip.signing
-```
-
-On Windows:
-
-```shell
-gradlew.bat publishToMavenLocal -Pskip.signing
-```
+-->
 
 ## SDK Example Usage (high-level)
 
-```java
-// ... 
+```csharp
+using Styra.Opa.AspNetCore;
 
-import com.styra.opa.springboot.OPAAuthorizationManager;
-import com.styra.opa.OPAClient;
+// ...
 
-@Configuration
-@EnableWebSecurity
-public class SecurityConfig {
+string opaURL = System.Environment.GetEnvironmentVariable("OPA_URL") ?? "http://localhost:8181";
+OPAClient opa = new OPAClient(opaURL);
 
-    @Autowired
-    TicketRepository ticketRepository;
+var builder = new WebHostBuilder()
+    .ConfigureServices(services =>
+    {
+        services.AddAuthentication( /* ... your authentication setup here ... */ );
+        services.AddRouting();
+        // ...
+    }).Configure(app =>
+    {
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UseMiddleware<OpaAuthorizationMiddleware>(opa, "authz/exampleapp/routes/allow");
+        // ...
+        // Your controller/routes added here.
+    });
 
-    @Autowired
-    TenantRepository tenantRepository;
-
-    @Autowired
-    CustomerRepository customerRepository;
-
-    @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
-        String opaURL = "http://localhost:8181";
-        String opaURLEnv = System.getenv("OPA_URL");
-        if (opaURLEnv != null) {
-            opaURL = opaURLEnv;
-        }
-        OPAClient opa = new OPAClient(opaURL);
-
-        AuthorizationManager<RequestAuthorizationContext> am = new OPAAuthorizationManager(opa, "tickets/spring/main");
-
-        http.authorizeHttpRequests(authorize -> authorize.anyRequest().access(am));
-
-        return http.build();
-    }
-
-}
-
+var app = builder.Build();
+app.Run();
 ```
 
 ## Policy Input/Output Schema
@@ -76,7 +51,7 @@ Documentation for the required input and output schema of policies used by the O
 
 **To build the SDK**, use `dotnet build`, the resulting JAR will be placed in `./build/libs/api.jar`.
 
-**To build the documentation** site, including JavaDoc, run `./scripts/build_docs.sh OUTPUT_DIR`. You should replace `OUTPUT_DIR` with a directory on your local system where you would like the generated docs to be placed. You can also preview the documentation site ephemerally using `./scripts/serve_docs.sh`, which will serve the docs on `http://localhost:8000` until you use Ctrl+C to exit the script.
+**To build the documentation** site, run `docfx docs/docfx.json -o OUTPUT_DIR`. You should replace `OUTPUT_DIR` with a directory on your local system where you would like the generated docs to be placed (the default behavior without `-o` will place the generated HTML docs site under the `docs/_site` folder in this repo). You can also preview the documentation site using `docfx docs/docfx.json --serve`, which will serve the docs on `http://localhost:8080` until you use Ctrl+C to exit.
 
 **To run the unit tests**, you can use `dotnet test`.
 

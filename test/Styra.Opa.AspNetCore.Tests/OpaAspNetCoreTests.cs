@@ -18,6 +18,9 @@ using System.Text.Encodings.Web;
 
 namespace Styra.Opa.AspNetCore.Tests;
 
+// This class is an ugly-but-effective mock, used in the E2E tests to
+// simulate successful authentication occurring earlier in the request
+// processing pipeline.
 // Source: https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-3.1#mock-authentication
 public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
@@ -85,6 +88,7 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         return new OpaClient(serverUrl: requestUri.ToString());
     }
 
+    // Unused, for now.
     private OpaClient GetEOpaClient()
     {
         var requestUri = new UriBuilder(Uri.UriSchemeHttp, _containerEopa.Hostname, _containerEopa.GetMappedPublicPort(8181)).Uri;
@@ -273,7 +277,9 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
     }
 }
 
-// Thanks to perplexity.ai for this class definition.
+// Thanks to perplexity.ai for this utility class definition.
+// If we include a JSON Diff package in the future, we will be able to remove
+// this class.
 public class JsonDiffer
 {
     public static string Diff(JToken left, JToken right, string path = "")
