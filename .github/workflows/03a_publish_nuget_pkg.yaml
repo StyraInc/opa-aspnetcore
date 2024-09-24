@@ -1,0 +1,61 @@
+name: "3a – Publish Package to NuGet"
+
+# Trigger the action on push to main
+on:
+  push:
+    branches:
+      - "main"
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+  NuGetDirectory: ${{ github.workspace }}/nuget
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get all history for automatic versioning
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --no-restore --verbosity normal
+
+      - name: Get latest version from NuGet
+        id: nuget_version
+        run: |
+          $latestVersion = (Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/styra.opa.aspnetcore/index.json" | ConvertFrom-Json).versions[-1]
+          echo "LATEST_VERSION=$latestVersion" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Get current version
+        id: current_version
+        run: |
+          $currentVersion = (Select-Xml -Path src/Styra.Opa.AspNetCore/Styra.Opa.AspNetCore.csproj -XPath "//PackageVersion").Node.InnerText
+          echo "CURRENT_VERSION=$currentVersion" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Pack
+        run: dotnet pack --configuration Release --output ${{ env.NuGetDirectory }} --no-build
+
+      - name: Publish NuGet package
+        if: steps.nuget_version.outputs.LATEST_VERSION != steps.current_version.outputs.CURRENT_VERSION
+        run: |
+          foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Filter *.nupkg)) {
+            dotnet nuget push $file --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          }
+        shell: pwsh

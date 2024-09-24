@@ -1,0 +1,36 @@
+name: "3 – Publish Github Release"
+
+# Trigger the action on push to main
+on:
+  push:
+    tags:
+      - "v*" # Trigger on tags starting with 'v'
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+  NuGetDirectory: ${{ github.workspace }}/nuget
+
+jobs:
+  github-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get all history for automatic versioning
+
+      - name: Generate Styra.Opa.AspNetCore GH release notes
+        run: scripts/latest-release-notes.sh --output=SDK_RELEASE_NOTES.md
+        env:
+          VERSION: ${{ steps.current_version.outputs.CURRENT_VERSION }}
+
+      - name: Create Styra.Opa.AspNetCore GH release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: SDK_RELEASE_NOTES.md
+          tag_name: ${{ github.ref }}
