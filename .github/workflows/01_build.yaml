@@ -23,6 +23,7 @@ jobs:
         run: dotnet restore
       - name: Build
         run: dotnet build
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -38,3 +39,44 @@ jobs:
         run: dotnet restore
       - name: Test
         run: dotnet test
+
+  release-reqs-check:
+    name: Release requirements check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tune GitHub-hosted runner network
+        uses: smorimoto/tune-github-hosted-runner-network@v1
+
+      - uses: actions/checkout@v4
+
+      - name: Get project version from `main`
+        id: proj_version_main
+        run: |
+          git fetch origin main:main
+          PROJ_VERSION_MAIN=$(git show main:src/Styra.Opa.AspNetCore/Styra.Opa.AspNetCore.csproj | grep -Eo '<Version>.*</Version>' | sed -E 's/<\/?Version>//g')
+          echo "PROJ_VERSION_MAIN=$PROJ_VERSION_MAIN" >> $GITHUB_ENV
+
+      - name: Get current version on this PR
+        id: proj_version_pr
+        run: |
+          PROJ_VERSION_PR=$(git show src/Styra.Opa.AspNetCore/Styra.Opa.AspNetCore.csproj | grep -Eo '<Version>.*</Version>' | sed -E 's/<\/?Version>//g')
+          echo "PROJ_VERSION_PR=$PROJ_VERSION_PR" >> $GITHUB_ENV
+
+      - name: Check for diff for project file changes.
+        run: |
+          if [ "$PROJ_VERSION_MAIN" != "$PROJ_VERSION_PR" ]; then
+            echo "Version changed from $PROJ_VERSION_MAIN to $PROJ_VERSION_PR"
+            echo "VERSION_CHANGED=true" >> $GITHUB_ENV
+          else
+            echo "Version unchanged"
+            echo "VERSION_CHANGED=false" >> $GITHUB_ENV
+          fi
+
+      - name: Check for other release-required files.
+        if: env.VERSION_CHANGED == 'true'
+        run: |
+          # Check for updated CHANGELOG.
+          if ! grep -q "^## $PROJ_VERSION_PR" CHANGELOG.md; then
+            echo "Error: Version $PROJ_VERSION_PR not found in CHANGELOG.md"
+            exit 1
+          fi
