@@ -53,7 +53,7 @@ jobs:
         run: dotnet pack --configuration Release --output ${{ env.NuGetDirectory }} --no-build
 
       - name: Publish NuGet package
-        if: steps.nuget_version.outputs.LATEST_VERSION != steps.current_version.outputs.CURRENT_VERSION
+        #if: steps.nuget_version.outputs.LATEST_VERSION != steps.current_version.outputs.CURRENT_VERSION
         run: |
           foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Filter *.nupkg)) {
             dotnet nuget push $file --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
@@ -89,7 +89,7 @@ jobs:
         shell: pwsh
 
       - name: Generate Styra.Opa.AspNetCore GH release notes
-        run: scripts/latest-release-notes.sh > SDK_RELEASE_NOTES.md
+        run: scripts/latest-release-notes.sh --output=SDK_RELEASE_NOTES.md
         env:
           VERSION: ${{ steps.current_version.outputs.CURRENT_VERSION }}
 
