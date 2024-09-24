@@ -2,8 +2,8 @@
 
 set -e
 
-OPA_DIR=$(dirname "${BASH_SOURCE}")/..
-CHANGELOG="${OPA_DIR}/CHANGELOG.md"
+TARGET_DIR=$(dirname "${BASH_SOURCE}")/..
+CHANGELOG="${TARGET_DIR}/CHANGELOG.md"
 
 usage() {
     echo "latest-release-notes.sh --output=<path>"
