@@ -32,12 +32,12 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release --no-restore
 
-      - name: Get latest version from NuGet
-        id: nuget_version
-        run: |
-          $latestVersion = (Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/Styra.Opa.AspNetCore/index.json" | ConvertFrom-Json).versions[-1]
-          echo "LATEST_VERSION=$latestVersion" >> $env:GITHUB_OUTPUT
-        shell: pwsh
+      #- name: Get latest version from NuGet
+      #  id: nuget_version
+      #  run: |
+      #    $latestVersion = (Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/Styra.Opa.AspNetCore/index.json" | ConvertFrom-Json).versions[-1]
+      #    echo "LATEST_VERSION=$latestVersion" >> $env:GITHUB_OUTPUT
+      #  shell: pwsh
 
       - name: Get current version
         id: current_version
