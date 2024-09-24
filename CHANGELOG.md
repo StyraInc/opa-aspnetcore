@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file. This
 project adheres to [Semantic Versioning](http://semver.org/).
 
+## 0.1.5
+
+This release is a release engineering test of the decoupled workflow.
+
 ## 0.1.4
 
 This release decouples Github Releases from NuGet package updates.
