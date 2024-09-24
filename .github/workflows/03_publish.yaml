@@ -37,12 +37,14 @@ jobs:
         run: |
           $latestVersion = (Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/Styra.Opa.AspNetCore/index.json" | ConvertFrom-Json).versions[-1]
           echo "LATEST_VERSION=$latestVersion" >> $env:GITHUB_OUTPUT
+        shell: pwsh
 
       - name: Get current version
         id: current_version
         run: |
           $currentVersion = (Select-Xml -Path src/Styra.Opa.AspNetCore/Styra.Opa.AspNetCore.csproj -XPath "//PackageVersion").Node.InnerText
           echo "CURRENT_VERSION=$currentVersion" >> $env:GITHUB_OUTPUT
+        shell: pwsh
 
       #- name: Test
       #  run: dotnet test --no-restore --verbosity normal
@@ -84,6 +86,7 @@ jobs:
         run: |
           $currentVersion = (Select-Xml -Path src/Styra.Opa.AspNetCore/Styra.Opa.AspNetCore.csproj -XPath "//PackageVersion").Node.InnerText
           echo "CURRENT_VERSION=$currentVersion" >> $env:GITHUB_OUTPUT
+        shell: pwsh
 
       - name: Generate Styra.Opa.AspNetCore GH release notes
         run: scripts/latest-release-notes.sh > SDK_RELEASE_NOTES.md
