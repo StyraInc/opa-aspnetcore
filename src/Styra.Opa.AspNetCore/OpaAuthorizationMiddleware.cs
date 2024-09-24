@@ -161,7 +161,6 @@ public class OpaAuthorizationMiddleware
     public Dictionary<string, object> MakeRequestInput(HttpContext context)
     {
         var subjectId = context.User.Identity?.Name ?? "";
-        //var subjectDetails = principal ?? "";
         var subjectClaims = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(context.User.Claims, new JsonSerializerSettings { ReferenceLoopHandling = ReferenceLoopHandling.Ignore })) ?? new { };
 
         string resourceId = context.Request.Path;

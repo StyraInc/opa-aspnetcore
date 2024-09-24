@@ -15,7 +15,7 @@ public class EOPAContainerFixture : IAsyncLifetime
             "testdata/simple/policy.rego",
             "testdata/simple/system.rego",
         };
-        string[] opaCmd = { "run", "--server", "--addr=0.0.0.0:8181", "--disable-telemetry" };
+        string[] opaCmd = ["run", "--server", "--addr=0.0.0.0:8181", "--disable-telemetry"];
         var startupCommand = new List<string>().Concat(opaCmd).Concat(startupFiles).ToArray();
 
         // Create a new instance of a container.

@@ -47,12 +47,12 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
     }
 }
 
-public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixture<EOPAContainerFixture>
+public class OpaAspNetCoreTests(OPAContainerFixture opaFixture, EOPAContainerFixture eopaFixture) : IClassFixture<OPAContainerFixture>, IClassFixture<EOPAContainerFixture>
 {
-    public IContainer _containerOpa;
-    public IContainer _containerEopa;
+    public IContainer _containerOpa = opaFixture.GetContainer();
+    public IContainer _containerEopa = eopaFixture.GetContainer();
 
-    public IWebHostBuilder GetWebHostBuilder()
+    public static IWebHostBuilder GetWebHostBuilder()
     {
         var builder = new WebHostBuilder()
             .ConfigureServices(services =>
@@ -73,12 +73,6 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
                 services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace).AddConsole());
             });
         return builder;
-    }
-
-    public OpaAspNetCoreTests(OPAContainerFixture opaFixture, EOPAContainerFixture eopaFixture)
-    {
-        _containerOpa = opaFixture.GetContainer();
-        _containerEopa = eopaFixture.GetContainer();
     }
 
     private OpaClient GetOpaClient()
@@ -211,9 +205,11 @@ public class OpaAspNetCoreTests : IClassFixture<OPAContainerFixture>, IClassFixt
         expectCtx.ID = "0";
         expectCtx.Data = expectData;
 
-        OpaResponse expect = new OpaResponse();
-        expect.Decision = true;
-        expect.Context = expectCtx;
+        OpaResponse expect = new()
+        {
+            Decision = true,
+            Context = expectCtx
+        };
         string expectedJson = JsonConvert.SerializeObject(expect, Formatting.Indented);
 
         IContextDataProvider prov = new ConstantContextDataProvider(new Dictionary<string, string>() {

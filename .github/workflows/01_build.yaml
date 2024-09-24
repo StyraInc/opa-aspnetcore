@@ -3,6 +3,10 @@ on:
   workflow_dispatch:
   pull_request:
 
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
 jobs:
   build:
     name: Build

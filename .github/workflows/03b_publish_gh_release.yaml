@@ -1,4 +1,4 @@
-name: "3 – Publish Github Release"
+name: "3b – Publish Github Release"
 
 # Trigger the action on push to main
 on:
