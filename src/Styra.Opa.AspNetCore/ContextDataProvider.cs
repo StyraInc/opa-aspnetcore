@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 
+namespace Styra.Opa.AspNetCore;
 
 /// <summary>
 /// This interface can be used to expose additional information to the OPA
