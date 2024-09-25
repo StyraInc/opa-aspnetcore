@@ -23,12 +23,13 @@ dotnet add package Styra.Opa.AspNetCore
 ## SDK Example Usage (high-level)
 
 ```csharp
+using Styra.Opa;
 using Styra.Opa.AspNetCore;
 
 // ...
 
-string opaURL = System.Environment.GetEnvironmentVariable("OPA_URL") ?? "http://localhost:8181";
-OPAClient opa = new OPAClient(opaURL);
+string opaUrl = System.Environment.GetEnvironmentVariable("OPA_URL") ?? "http://localhost:8181";
+OpaClient opa = new OpaClient(opaUrl);
 
 var builder = new WebHostBuilder()
     .ConfigureServices(services =>
