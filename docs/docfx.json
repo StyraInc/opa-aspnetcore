@@ -11,7 +11,8 @@
       },
       {
         "files": [
-          "README.md"
+          "README.md",
+          "DEVELOPMENT.md"
         ],
         "src": "../"
       }
