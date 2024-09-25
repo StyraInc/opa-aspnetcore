@@ -1,7 +1,7 @@
 # OPA ASP.NET Core SDK
 
 > [!IMPORTANT]
-> The documentation for this SDK lives at [https://docs.styra.com/sdk](https://docs.styra.com/sdk), with reference documentation available at [https://styrainc.github.io/opa-aspnetcore/docs](https://styrainc.github.io/opa-aspnetcore/docs)
+> The documentation for this SDK lives at [https://docs.styra.com/sdk](https://docs.styra.com/sdk), with reference documentation available at [https://styrainc.github.io/opa-aspnetcore/](https://styrainc.github.io/opa-aspnetcore/)
 
 You can use the Styra OPA ASP.NET Core SDK to connect [Open Policy Agent](https://www.openpolicyagent.org/) and [Enterprise OPA](https://www.styra.com/enterprise-opa/) deployments to your [ASP.NET Core](https://github.com/dotnet/aspnetcore) applications using the included [Middleware](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/?view=aspnetcore-8.0) implementation.
 
