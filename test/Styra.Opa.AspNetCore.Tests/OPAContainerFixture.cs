@@ -15,7 +15,7 @@ public class OPAContainerFixture : IAsyncLifetime
             "testdata/simple/policy.rego",
             "testdata/simple/system.rego",
         };
-        string[] opaCmd = { "run", "--server" };
+        string[] opaCmd = { "run", "--server", "--addr=0.0.0.0:8181" };
         var startupCommand = new List<string>().Concat(opaCmd).Concat(startupFiles).ToArray();
 
         // Create a new instance of a container.
@@ -24,6 +24,8 @@ public class OPAContainerFixture : IAsyncLifetime
           // Bind port 8181 of the container to a random port on the host.
           .WithPortBinding(8181, true)
           .WithCommand(startupCommand)
+          // Debugging aid, helpful if the Rego files have syntax errors.
+          .WithOutputConsumer(Consume.RedirectStdoutAndStderrToConsole())
           // Map our policy and data files into the container instance.
           .WithResourceMapping(new DirectoryInfo("testdata"), "/testdata/")
           // Wait until the HTTP endpoint of the container is available.
@@ -34,6 +36,10 @@ public class OPAContainerFixture : IAsyncLifetime
         // Start the container.
         await container.StartAsync()
             .ConfigureAwait(false);
+        // DEBUG:
+        // var (stderr, stdout) = await container.GetLogsAsync(default);
+        // Console.WriteLine("STDERR: {0}", stderr);
+        // Console.WriteLine("STDOUT: {0}", stdout);
         _container = container;
     }
     public async Task DisposeAsync()

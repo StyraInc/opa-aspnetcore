@@ -7,6 +7,12 @@ env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_NOLOGO: true
 
+# When a new revision is pushed to a PR, cancel all in-progress CI runs for that
+# PR. See https://docs.github.com/en/actions/using-jobs/using-concurrency
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build
@@ -18,7 +24,7 @@ jobs:
       - name: Setup dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "6.0.x"
+          dotnet-version: "8.x"
       - name: Install dependencies
         run: dotnet restore
       - name: Build
@@ -34,11 +40,14 @@ jobs:
       - name: Setup dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "6.0.x"
+          dotnet-version: "8.x"
       - name: Install dependencies
         run: dotnet restore
       - name: Test
         run: dotnet test
+        env:
+          EOPA_LICENSE_TOKEN: ${{ secrets.EOPA_LICENSE_TOKEN }}
+        timeout-minutes: 5
 
   release-reqs-check:
     name: Release requirements check
