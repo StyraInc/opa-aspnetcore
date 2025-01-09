@@ -26,11 +26,12 @@ public class EOPAContainerFixture : IAsyncLifetime
           // Bind port 8181 of the container to a random port on the host.
           .WithPortBinding(8181, true)
           .WithCommand(startupCommand)
+          // Debugging aid, helpful if the Rego files have syntax errors.
+          .WithOutputConsumer(Consume.RedirectStdoutAndStderrToConsole())
           // Map our policy and data files into the container instance.
           .WithResourceMapping(new DirectoryInfo("testdata"), "/testdata/")
           // Wait until the HTTP endpoint of the container is available.
           .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(8181).ForPath("/health")))
-          //.WithOutputConsumer(Consume.RedirectStdoutAndStderrToConsole()) // DEBUG
           // Build the container configuration.
           .Build();
 
