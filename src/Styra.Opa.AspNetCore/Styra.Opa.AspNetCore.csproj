@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>Styra.Opa.AspNetCore</PackageId>
     <Version>0.1.7</Version>
@@ -23,7 +23,7 @@
   
   <ItemGroup>
     <PackageReference Include="newtonsoft.json" Version="13.0.3" />
-    <PackageReference Include="nodatime" Version="3.2.1" />
+    <PackageReference Include="nodatime" Version="3.2.2" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.1" />
     <PackageReference Include="Styra.Opa" Version="1.4.1" />
