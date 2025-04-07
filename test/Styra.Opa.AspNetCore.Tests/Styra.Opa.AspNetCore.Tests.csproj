@@ -27,7 +27,7 @@
 
   <!-- OPA API Reference. -->
   <ItemGroup>
-    <PackageReference Include="Styra.Opa" Version="1.4.1" />
+    <PackageReference Include="Styra.Opa" Version="1.5.1" />
   </ItemGroup>
 
   <!-- Ensure our data files are copied next to the test executables. -->
