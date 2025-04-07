@@ -11,7 +11,7 @@
   <!-- Normal Package Includes. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="8.0.14" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Testcontainers" Version="4.1.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
