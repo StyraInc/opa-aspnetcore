@@ -10,6 +10,8 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>1591</NoWarn>
     <RepositoryUrl>https://github.com/StyraInc/opa-aspnetcore</RepositoryUrl>
+    <PackageProjectUrl>https://docs.styra.com/sdk/aspnetcore/how-to/add-sdk</PackageProjectUrl>
+    <PackageLicenseExpression>APACHE-2.0</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
